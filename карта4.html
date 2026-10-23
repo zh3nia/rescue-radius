@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Карта радіусів для навчання НУЦЗУ ДСНС</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
     <!-- Підключення стилів та скриптів Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -91,6 +93,16 @@
         .del-btn:hover { background-color: #d32f2f; }
         
         .empty-list { color: gray; font-size: 13px; text-align: center; font-style: italic; }
+
+        @media (max-width: 768px) {
+    #controls { /* Замініть .panel на вашу назву класу панелі */
+        width: 90% !important;
+        max-height: 40vh !important; /* Панель займатиме лише 40% висоти екрана */
+        overflow-y: auto !important; /* Дозволяє гортати вміст панелі */
+        left: 5% !important;
+        top: 10px !important;
+    }
+}
     </style>
 </head>
 <body>
