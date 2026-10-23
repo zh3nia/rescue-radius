@@ -5,24 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>RescueRadius - Карта ДСНС</title>
 
-    <!-- Офіційна бібліотека Telegram для Mini Apps -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-    <!-- Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
-        /* Базові налаштування (захист від зсувів на iOS) */
         html, body {
             height: 100%; width: 100%; margin: 0; padding: 0;
             font-family: Arial, sans-serif; overflow: hidden;
             position: fixed; background: #e5e5e5;
         }
 
-        #map {
-            height: 100%; width: 100%; position: absolute; z-index: 1; top: 0; left: 0;
-        }
+        #map { height: 100%; width: 100%; position: absolute; z-index: 1; top: 0; left: 0; }
 
         #watermark {
             position: absolute; bottom: 20px; right: 10px; z-index: 1000;
@@ -30,14 +24,20 @@
             pointer-events: none; text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
         }
 
-        /* Загальні стилі панелей */
+        /* Кнопка-бургер меню */
+        #menu-toggle {
+            position: absolute; top: 10px; left: 10px; z-index: 1001;
+            background: rgba(255, 255, 255, 0.95); border: none;
+            padding: 8px 14px; border-radius: 8px; font-size: 22px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; color: #333;
+        }
+
         .ui-panel {
             position: absolute; background: rgba(255, 255, 255, 0.95);
             padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            z-index: 1000; box-sizing: border-box; display: flex; flex-direction: column;
+            z-index: 1000; box-sizing: border-box; flex-direction: column;
         }
 
-        /* Елементи керування */
         .control-group { margin-bottom: 12px; }
         label { display: block; font-weight: bold; font-size: 13px; margin-bottom: 4px; color: #333; }
         input[type="text"], input[type="number"] { 
@@ -56,7 +56,6 @@
         .btn-red { background-color: #d32f2f; }
         .btn-green { background-color: #4CAF50; }
 
-        /* Список зон */
         #zone-list { overflow-y: auto; flex-grow: 1; -webkit-overflow-scrolling: touch; padding-right: 5px; }
         .zone-item { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
         .zone-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 14px; }
@@ -64,25 +63,20 @@
         .zone-settings { margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px; }
         .flex-row { display: flex; gap: 10px; }
         .del-btn { background: #f44336; color: white; border: none; border-radius: 4px; padding: 8px; width: 100%; margin-top: 10px; font-weight: bold; }
-        
         .zone-label { background: rgba(255,255,255,0.9); border: 1px solid #333; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 13px; text-align: center; white-space: nowrap; }
 
-        /* ДЕсктоп (ПК) */
+        /* ПК версія */
         @media (min-width: 769px) {
-            #panel-controls { top: 15px; left: 15px; width: 320px; max-height: calc(100% - 30px); overflow-y: auto; }
-            #panel-list { top: 15px; right: 15px; width: 320px; max-height: calc(100% - 30px); }
+            #panel-controls { top: 60px; left: 15px; width: 320px; max-height: calc(100% - 75px); overflow-y: auto; display: flex; }
+            #panel-list { top: 15px; right: 15px; width: 320px; max-height: calc(100% - 30px); display: flex; }
+            #menu-toggle { left: 15px; }
         }
 
-        /* Мобільні пристрої (Telegram) */
+        /* Мобільна версія */
         @media (max-width: 768px) {
-            .ui-panel { 
-                width: 280px; /* Робимо панелі вузькими */
-                left: 10px;   /* Притискаємо до лівого кута */
-            }
-            /* Панель керування зверху */
-            #panel-controls { top: 10px; max-height: 45%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-            /* Панель списку знизу */
-            #panel-list { bottom: 10px; max-height: 40%; }
+            .ui-panel { width: 280px; left: 10px; }
+            #panel-controls { top: 60px; max-height: 45%; overflow-y: auto; -webkit-overflow-scrolling: touch; display: none; }
+            #panel-list { bottom: 10px; max-height: 40%; display: flex; }
         }
     </style>
 </head>
@@ -91,11 +85,14 @@
     <div id="map"></div>
     <div id="watermark">created by Marchenko</div>
 
-    <!-- Ліва/Верхня панель (Створення) -->
+    <!-- Кнопка відкриття меню -->
+    <button id="menu-toggle" onclick="toggleMenu()">☰</button>
+
+    <!-- Верхня панель (Створення) -->
     <div id="panel-controls" class="ui-panel">
         <h3 style="margin: 0 0 15px 0;">Панель радіусів</h3>
         <div class="control-group">
-            <input type="text" id="search" placeholder="Пошук міста/адреси (напр. Черкаси)">
+            <input type="text" id="search" placeholder="Пошук (напр. Черкаси)">
             <button class="action-btn btn-blue" style="margin-top: 5px;" onclick="searchLocation()">Знайти на карті</button>
         </div>
         <div class="control-group flex-row">
@@ -119,27 +116,35 @@
         <button id="draw-btn" class="action-btn btn-red" onclick="toggleDrawing()">Поставити точку</button>
     </div>
 
-    <!-- Права/Нижня панель (Список) -->
+    <!-- Нижня панель (Список) -->
     <div id="panel-list" class="ui-panel">
         <h3 style="margin: 0 0 10px 0;">Активні зони</h3>
         <div id="zone-list"></div>
     </div>
 
     <script>
-        // Ініціалізація Telegram WebApp
         try {
             const tg = window.Telegram.WebApp;
-            tg.expand(); // Розгорнути на весь екран телефону
+            tg.expand();
             tg.ready();
-        } catch (e) { console.log("Телеграм не виявлено, звичайний браузер"); }
+        } catch (e) { console.log("Браузер ПК"); }
 
-        // Блокування кліків по карті через панелі
         L.DomEvent.disableClickPropagation(document.getElementById('panel-controls'));
         L.DomEvent.disableClickPropagation(document.getElementById('panel-list'));
+        L.DomEvent.disableClickPropagation(document.getElementById('menu-toggle'));
 
-        // Ініціалізація карти
+        // Функція відкриття/закриття меню
+        function toggleMenu() {
+            const panel = document.getElementById('panel-controls');
+            if (panel.style.display === 'none' || panel.style.display === '') {
+                panel.style.display = 'flex';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
         let map = L.map('map', { zoomControl: false }).setView([49.4444, 32.0597], 12);
-        L.control.zoom({ position: 'bottomleft' }).addTo(map); // Зум зліва знизу
+        L.control.zoom({ position: 'bottomright' }).addTo(map); 
 
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles © Esri'
@@ -150,7 +155,6 @@
         let zones = [];
         let zoneCounter = 1;
 
-        // Робота з даними
         function saveZones() {
             const data = zones.map(z => ({
                 id: z.id, name: z.name, defaultName: z.defaultName,
@@ -180,7 +184,6 @@
             renderZoneList();
         }
 
-        // Логіка малювання
         function toggleDrawing() {
             isDrawingMode = !isDrawingMode;
             const btn = document.getElementById("draw-btn");
@@ -219,7 +222,6 @@
             saveZones();
         });
 
-        // Інтерфейс списку
         function renderZoneList() {
             const listContainer = document.getElementById('zone-list');
             if (zones.length === 0) {
