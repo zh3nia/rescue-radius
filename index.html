@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RescueRadius - Карта ДСНС</title>
+
+    <!-- Офіційна бібліотека Telegram для Mini Apps -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        /* Базові налаштування (захист від зсувів на iOS) */
+        html, body {
+            height: 100%; width: 100%; margin: 0; padding: 0;
+            font-family: Arial, sans-serif; overflow: hidden;
+            position: fixed; background: #e5e5e5;
+        }
+
+        #map {
+            height: 100%; width: 100%; position: absolute; z-index: 1; top: 0; left: 0;
+        }
+
+        #watermark {
+            position: absolute; bottom: 20px; right: 10px; z-index: 1000;
+            font-size: 11px; color: rgba(0, 0, 0, 0.6); font-weight: bold;
+            pointer-events: none; text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+        }
+
+        /* Загальні стилі панелей */
+        .ui-panel {
+            position: absolute; background: rgba(255, 255, 255, 0.95);
+            padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000; box-sizing: border-box; display: flex; flex-direction: column;
+        }
+
+        /* Елементи керування */
+        .control-group { margin-bottom: 12px; }
+        label { display: block; font-weight: bold; font-size: 13px; margin-bottom: 4px; color: #333; }
+        input[type="text"], input[type="number"] { 
+            width: 100%; padding: 8px; box-sizing: border-box; 
+            border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+        }
+        input[type="color"] { width: 100%; height: 36px; padding: 0; border: none; cursor: pointer; border-radius: 6px; }
+        input[type="range"] { width: 100%; }
+        
+        button.action-btn {
+            width: 100%; padding: 12px; border: none; border-radius: 6px;
+            font-size: 15px; font-weight: bold; color: white; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-blue { background-color: #2196F3; margin-bottom: 10px; }
+        .btn-red { background-color: #d32f2f; }
+        .btn-green { background-color: #4CAF50; }
+
+        /* Список зон */
+        #zone-list { overflow-y: auto; flex-grow: 1; -webkit-overflow-scrolling: touch; padding-right: 5px; }
+        .zone-item { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+        .zone-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 14px; }
+        .gear-btn { background: none; border: none; font-size: 18px; cursor: pointer; padding: 5px; }
+        .zone-settings { margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px; }
+        .flex-row { display: flex; gap: 10px; }
+        .del-btn { background: #f44336; color: white; border: none; border-radius: 4px; padding: 8px; width: 100%; margin-top: 10px; font-weight: bold; }
+        
+        .zone-label { background: rgba(255,255,255,0.9); border: 1px solid #333; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 13px; text-align: center; white-space: nowrap; }
+
+        /* ДЕсктоп (ПК) */
+        @media (min-width: 769px) {
+            #panel-controls { top: 15px; left: 15px; width: 320px; max-height: calc(100% - 30px); overflow-y: auto; }
+            #panel-list { top: 15px; right: 15px; width: 320px; max-height: calc(100% - 30px); }
+        }
+
+        /* Мобільні пристрої (Telegram) */
+        @media (max-width: 768px) {
+            .ui-panel { width: 92%; left: 4%; }
+            /* Панель керування зверху */
+            #panel-controls { top: 10px; max-height: 45%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+            /* Панель списку знизу */
+            #panel-list { bottom: 10px; max-height: 40%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+    <div id="watermark">created by Marchenko</div>
+
+    <!-- Ліва/Верхня панель (Створення) -->
+    <div id="panel-controls" class="ui-panel">
+        <h3 style="margin: 0 0 15px 0;">Панель радіусів</h3>
+        <div class="control-group">
+            <input type="text" id="search" placeholder="Пошук міста/адреси (напр. Черкаси)">
+            <button class="action-btn btn-blue" style="margin-top: 5px;" onclick="searchLocation()">Знайти на карті</button>
+        </div>
+        <div class="control-group flex-row">
+            <div style="flex: 1;">
+                <label>Радіус (м):</label>
+                <input type="number" id="radius" value="1000" min="1">
+            </div>
+            <div style="flex: 1;">
+                <label>Колір:</label>
+                <input type="color" id="color" value="#ff0000">
+            </div>
+        </div>
+        <div class="control-group">
+            <label>Прозорість:</label>
+            <input type="range" id="opacity" min="0.1" max="1" step="0.1" value="0.4">
+        </div>
+        <div class="control-group">
+            <label>Підпис зони:</label>
+            <input type="text" id="label-text" placeholder="Наприклад: Зона евакуації">
+        </div>
+        <button id="draw-btn" class="action-btn btn-red" onclick="toggleDrawing()">Поставити точку</button>
+    </div>
+
+    <!-- Права/Нижня панель (Список) -->
+    <div id="panel-list" class="ui-panel">
+        <h3 style="margin: 0 0 10px 0;">Активні зони</h3>
+        <div id="zone-list"></div>
+    </div>
+
+    <script>
+        // Ініціалізація Telegram WebApp
+        try {
+            const tg = window.Telegram.WebApp;
+            tg.expand(); // Розгорнути на весь екран телефону
+            tg.ready();
+        } catch (e) { console.log("Телеграм не виявлено, звичайний браузер"); }
+
+        // Блокування кліків по карті через панелі
+        L.DomEvent.disableClickPropagation(document.getElementById('panel-controls'));
+        L.DomEvent.disableClickPropagation(document.getElementById('panel-list'));
+
+        // Ініціалізація карти
+        let map = L.map('map', { zoomControl: false }).setView([49.4444, 32.0597], 12);
+        L.control.zoom({ position: 'bottomleft' }).addTo(map); // Зум зліва знизу
+
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles © Esri'
+        }).addTo(map);
+
+        let isDrawingMode = false;
+        let searchMarker = null;
+        let zones = [];
+        let zoneCounter = 1;
+
+        // Робота з даними
+        function saveZones() {
+            const data = zones.map(z => ({
+                id: z.id, name: z.name, defaultName: z.defaultName,
+                lat: z.circleLayer.getLatLng().lat, lng: z.circleLayer.getLatLng().lng,
+                radius: z.radius, color: z.color, opacity: z.opacity, isLabelVisible: z.isLabelVisible
+            }));
+            localStorage.setItem('dsns_zones_v2', JSON.stringify(data));
+        }
+
+        function loadZones() {
+            const saved = localStorage.getItem('dsns_zones_v2');
+            if (!saved) { renderZoneList(); return; }
+            const data = JSON.parse(saved);
+            data.forEach(z => {
+                const circle = L.circle([z.lat, z.lng], { color: z.color, fillColor: z.color, fillOpacity: z.opacity, radius: z.radius }).addTo(map);
+                let marker = L.marker([z.lat, z.lng], { icon: L.divIcon({ className: 'zone-label', html: z.name, iconSize: null, iconAnchor: [0, 0] }) });
+                if (z.isLabelVisible) marker.addTo(map);
+                
+                zones.push({
+                    id: z.id, name: z.name, defaultName: z.defaultName, radius: z.radius,
+                    color: z.color, opacity: z.opacity, circleLayer: circle, labelLayer: marker,
+                    isLabelVisible: z.isLabelVisible, settingsOpen: false
+                });
+                let num = parseInt(z.defaultName.replace('Зона ', ''));
+                if (!isNaN(num) && num >= zoneCounter) zoneCounter = num + 1;
+            });
+            renderZoneList();
+        }
+
+        // Логіка малювання
+        function toggleDrawing() {
+            isDrawingMode = !isDrawingMode;
+            const btn = document.getElementById("draw-btn");
+            if (isDrawingMode) {
+                btn.className = "action-btn btn-green";
+                btn.innerText = "Клікніть на карту...";
+            } else {
+                btn.className = "action-btn btn-red";
+                btn.innerText = "Поставити точку";
+            }
+        }
+
+        map.on('click', function(e) {
+            if (!isDrawingMode) return;
+            const radius = parseFloat(document.getElementById("radius").value) || 1000;
+            const color = document.getElementById("color").value;
+            const opacity = parseFloat(document.getElementById("opacity").value);
+            const labelText = document.getElementById("label-text").value;
+            const defaultZoneName = `Зона ${zoneCounter}`;
+
+            const circle = L.circle(e.latlng, { color: color, fillColor: color, fillOpacity: opacity, radius: radius }).addTo(map);
+            let marker = L.marker(e.latlng, { icon: L.divIcon({ className: 'zone-label', html: labelText, iconSize: null, iconAnchor: [0, 0] }) });
+            
+            let isLabelVisible = false;
+            if (labelText.trim() !== "") { marker.addTo(map); isLabelVisible = true; }
+
+            zones.push({
+                id: Date.now(), name: labelText || defaultZoneName, defaultName: defaultZoneName,
+                radius: radius, color: color, opacity: opacity, circleLayer: circle, 
+                labelLayer: marker, isLabelVisible: isLabelVisible, settingsOpen: false
+            });
+            
+            zoneCounter++;
+            renderZoneList(); 
+            toggleDrawing();  
+            saveZones();
+        });
+
+        // Інтерфейс списку
+        function renderZoneList() {
+            const listContainer = document.getElementById('zone-list');
+            if (zones.length === 0) {
+                listContainer.innerHTML = '<div style="color:gray; font-size:13px; text-align:center;">Немає доданих зон</div>';
+                return;
+            }
+            listContainer.innerHTML = '';
+            [...zones].reverse().forEach(zone => {
+                const inputValue = (zone.name === zone.defaultName && !zone.isLabelVisible) ? '' : zone.name;
+                const div = document.createElement('div');
+                div.className = 'zone-item';
+                div.innerHTML = `
+                    <div class="zone-header">
+                        <span style="overflow:hidden; text-overflow:ellipsis;">${zone.name}</span>
+                        <button class="gear-btn" onclick="toggleZoneSettings(${zone.id})">⚙️</button>
+                    </div>
+                    <div class="zone-settings" id="settings-${zone.id}" style="display: ${zone.settingsOpen ? 'block' : 'none'};">
+                        <label>Підпис:</label>
+                        <input type="text" id="list-label-${zone.id}" value="${inputValue}" oninput="updateZone(${zone.id})">
+                        <div class="flex-row" style="margin-top:8px;">
+                            <div style="flex:1;"><label>Колір:</label><input type="color" id="list-color-${zone.id}" value="${zone.color}" oninput="updateZone(${zone.id})"></div>
+                            <div style="flex:1;"><label>Прозор.:</label><input type="range" id="list-opacity-${zone.id}" min="0.1" max="1" step="0.1" value="${zone.opacity}" oninput="updateZone(${zone.id})"></div>
+                        </div>
+                        <button class="del-btn" onclick="deleteZone(${zone.id})">Видалити</button>
+                    </div>
+                `;
+                listContainer.appendChild(div);
+            });
+        }
+
+        function toggleZoneSettings(id) {
+            const zone = zones.find(z => z.id === id);
+            if (zone) {
+                zone.settingsOpen = !zone.settingsOpen;
+                renderZoneList();
+            }
+        }
+
+        function updateZone(id) {
+            const zone = zones.find(z => z.id === id);
+            if (!zone) return;
+            const newLabel = document.getElementById(`list-label-${id}`).value;
+            const newColor = document.getElementById(`list-color-${id}`).value;
+            const newOpacity = document.getElementById(`list-opacity-${id}`).value;
+
+            zone.circleLayer.setStyle({ color: newColor, fillColor: newColor, fillOpacity: newOpacity });
+            if (newLabel.trim() !== "") {
+                zone.labelLayer.setIcon(L.divIcon({ className: 'zone-label', html: newLabel, iconSize: null, iconAnchor: [0, 0] }));
+                if (!zone.isLabelVisible) { zone.labelLayer.addTo(map); zone.isLabelVisible = true; }
+            } else if (zone.isLabelVisible) { map.removeLayer(zone.labelLayer); zone.isLabelVisible = false; }
+
+            zone.name = newLabel || zone.defaultName;
+            zone.color = newColor; zone.opacity = newOpacity;
+            saveZones();
+        }
+
+        function deleteZone(id) {
+            const index = zones.findIndex(z => z.id === id);
+            if (index > -1) {
+                map.removeLayer(zones[index].circleLayer);
+                if (zones[index].isLabelVisible) map.removeLayer(zones[index].labelLayer);
+                zones.splice(index, 1);
+                renderZoneList(); saveZones();
+            }
+        }
+
+        function searchLocation() {
+            const query = document.getElementById('search').value;
+            if (!query) return;
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+                .then(r => r.json()).then(data => {
+                    if (data && data.length > 0) {
+                        map.setView([data[0].lat, data[0].lon], 13);
+                        if (searchMarker) map.removeLayer(searchMarker);
+                        searchMarker = L.marker([data[0].lat, data[0].lon]).addTo(map);
+                    } else alert("Локацію не знайдено");
+                });
+        }
+
+        loadZones();
+    </script>
+</body>
+</html>
