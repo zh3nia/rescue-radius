@@ -75,7 +75,10 @@
 
         /* Мобільні пристрої (Telegram) */
         @media (max-width: 768px) {
-            .ui-panel { width: 92%; left: 4%; }
+            .ui-panel { 
+                width: 280px; /* Робимо панелі вузькими */
+                left: 10px;   /* Притискаємо до лівого кута */
+            }
             /* Панель керування зверху */
             #panel-controls { top: 10px; max-height: 45%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
             /* Панель списку знизу */
